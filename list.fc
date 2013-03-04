@@ -1,0 +1,40 @@
+data list!auto {
+	empty()
+	cons(auto head, list!auto tail)
+}
+
+bool op(asBool)(list a) {
+	match(a.empty) => false
+	match(a.cons) => true
+}
+
+// head and tail are defined by the names of the arguments to the cons constructor
+auto op(.)(list a)
+	match(a) => a.head
+
+auto op(..)(list a)
+	match(a) => a.tail
+
+list op([])(auto a)
+	cons(a, empty())
+
+list op(++)(list a, list b) {
+	match(!a) => b
+	match(a) => cons(.a, a.. ++ b)
+}
+
+auto head(list a)
+	match(a) => .a
+
+list tail(list a)
+	match(a) => a..
+
+list init(list a) {
+	match(a : !a..) => empty()
+	match(a) => [.a] ~ init(a..)
+}
+
+auto last(list l) {
+	match(a : !a..) => .a
+	match(a) => last(a..)
+}
