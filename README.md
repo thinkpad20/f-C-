@@ -174,7 +174,7 @@ data List a = Empty | Cons a (List a)
 Using our algebraic definitions from before, let's try to make one of these in functional C:
 
 ```
-data list!auto {
+datatype list!auto {
     empty()
     cons(auto head, list!auto tail)
 }
@@ -219,7 +219,7 @@ Now let's try to implement some fundamental list operations. We'll take the expr
 
 ```
 // (Restatement)
-data list!auto {
+datatype list!auto {
     empty()
     cons(auto head, list!auto tail)
 }
@@ -319,7 +319,7 @@ list map(list a, function f) {
     match(a, f) => f(.a) ~ map(a.., f)
 }
 
-data Num {
+datatype Num {
     Int(int i)
     Double(double d)
 }
@@ -420,10 +420,10 @@ Note that we are smoothing over the important issue that `singleton`, as defined
 
 Now that I mention it, the idea that all internal variables of an algebraic datatype might be pointers means that we might be able to simplify our structures by using an internal array of `void *`s rather than a tagged union.
 
-Let's try this approach to build a data type which can represent a circle or a rectangle:
+Let's try this approach to build a datatype which can represent a circle or a rectangle:
 
 ```
-data Shape {
+datatype Shape {
     Circle(int x, int y, double radius)
     Rectangle(int x, int y, int length, int width)
 }
@@ -500,7 +500,7 @@ Area(struct Shape s) {
 Although we have a somewhat hard-on-the-eyes pointer dereference situation, I think in the end this is cleaner (note that previously I had been smoothing that over). Pursuing this idea a bit further, we could do away with the num type entirely, instead defining a generic "data" type which we could customize to hold anything:
 
 ```c
-struct data {
+struct datatype {
     int oType;
     int iType;
     void **vars;
@@ -519,11 +519,11 @@ Then to define a specific data type, all we need is to define the relevant const
 
 struct data
 Circle_constructor (int x, int y, double radius) {
-    struct data newData;
+    struct datatype newData;
     newData.oType = Shape_DATA_OTYPE;
     newData.iType = Circle_DATA_ITYPE;
     [...]
 }
 ```
 
-This is much more elegant and extensible; I'm leaning towards this. If everything's allocated on the heap anyway, why worry...
+This is much more elegant and extensible; I'm leaning towards this. If everything's allocated on the heap anyway, why worry? :) Also this allows us to define new datatypes without recompiling, or even create "anonymous" temporary datatypes inside of a single context! Perfect for an interpreter.
