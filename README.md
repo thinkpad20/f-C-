@@ -150,7 +150,7 @@ int sumList(list!int l) {
 
 Here I'm envisioning match to be a boolean function which may be a simple if but could allow us to do pattern matching, perhaps allow us to do more advanced Haskell-like pattern matching (e.g. multiple representations of the same data) at some future point.
 
-Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll use the => symbol to declare that the final statement of a block is a return. We could simply make this default behavior, but this gives a clearer syntax anyway. It might be desirable to have the => itself be optional - useful for clarification. We'll see. Note that we're allowing a return to be explicitly declared if desired. This would give us:
+Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll use the => symbol to declare that the next statement (or the final statement of a block) is a return. We could simply make this default behavior, but this gives a clearer syntax anyway. It might be desirable to have the => itself be optional -- just useful for clarification. We'll see. Note that we're allowing a return to be explicitly declared if desired. This would give us:
 
 ```
 auto sumList(list l) {
@@ -328,13 +328,16 @@ list!Num squareList(list!Num a) =>
     map(a, lambda(x) => x*x)
 ```
 
-Here map is a function which takes a function (here declared generically as a simple type; this definition might need to be more robust) and a list, and returns a list where the function has been applied to each item in the list. The keyword 'lambda' in this case is fulfilling a similar function to 'match' in our normal function declarations. Assuming we have some pattern-matching capabilities in play, we could even make a pattern-matching lambda function:
+Here map is a function which takes a function (here declared generically as a simple type; this definition might need to be more robust) and a list, and returns a list where the function has been applied to each item in the list. The keyword 'lambda' in this case is fulfilling a similar function to 'match' in our normal function declarations. 
+
+
+Assuming we have some pattern-matching capabilities in play, we could even make a pattern-matching lambda function:
 
 ```
 list!int intSquareList(list!Num a) =>
     map(a,
         lambda(x.Int) => x*x
-        lambda(x.Double) => int(x*x) 
+        lambda(x) => int(x*x) // like match, order matters
        )
 ```
 
@@ -350,11 +353,41 @@ list!int intSquareList(list!Num a) =>
     map(a, intSquare)
 ```
 
-Compiling code containing a lambda function to C might be relatively simple:
+Let's remind ourselves how the Num datatype and its constructors would look after compilation to C (this may be a "prettier" version of how they would actually look, depending on how much modification to type names, etc is required to maintain uniqueness):
 
 ```c
-int lambda0(int x) {
-    return x*x;
+struct Num {
+    enum {Int_t, Double_t} t;
+    struct {
+        struct { int val; } Int;
+        struct { double val; } Double;
+    } data;
+}
+
+struct Num 
+Int(int val) {
+    struct Num newData;
+    newData.t = Int_t;
+    newData.data.Int.val = val;
+    return newData;
+}
+
+struct Num 
+Double(double val) {
+    struct Num newData;
+    newData.t = Double_t;
+    newData.data.Double.val = val;
+    return newData;
+}
+```
+
+Once those definitions are out of the way, implementing a lambda function to C might be relatively straightforward: we simply write a version of the function outside of the function we're calling from, and call it as normal:
+
+```c
+struct Num lambda0(struct Num x) {
+    if (x.t == Int_t)
+        return Int(x.data.Int.val * x.data.Int.val);
+    return Double(x.data.Double.val * x.data.Double.val);
 }
 
 list squareList(list l) {
@@ -366,4 +399,131 @@ list squareList(list l) {
 }
 ```
 
-Essentially, wherever we have a lambda function, we rewrite it as a "real" function and call it instead. (Or presumably, and definitely for a case like this, we might simply inline the function).
+Note that our lambda function, just like its counterpart in f(C), returns the polymorphic type Num. In our example with pattern-matching lambdas, we guaranteed it returned an int. Let's see how this would look:
+
+```c
+int lambda0(Num x) {
+    if (x.t == Int_t)
+        return (x->data.Int.val)*(x->data.Int.val);
+    return int(x->data.Double.val)*(x->data.Double.val);
+}
+
+list squareList(list l) {
+    if (l->t == empty_t)
+        return empty();
+    if (l->t == cons_t)
+        return concat(singleton(Int(lambda0(l->data.cons.head))), 
+                      squareList(l->data.cons.tail));
+}
+```
+Note that we are smoothing over the important issue that `singleton`, as defined above, takes a `void *` as its argument, and `Int` returns a value on the stack. This raises the essential question of how variables are allocated and deallocated. My idea on this one so far (which has not always been reflected in the code samples I've written) is to have all `data` objects be allocated on the heap and garbage-collected (as they are in Haskell), while allowing local variables, and any regular C datatypes to be allocated as indicated by the user. Clearly the performance of the garbage collector will be key, as will the efficacy of any number of optimizations possible by the code (such as tail-call optimizations in our list operations). All of these things will remain works in progress, presumably, for some time to come. For now, however, let's just maintain the pleasant assumption that `singleton` and all other functions are magically polymorphic.
+
+Now that I mention it, the idea that all internal variables of an algebraic datatype might be pointers means that we might be able to simplify our structures by using an internal array of `void *`s rather than a tagged union.
+
+Let's try this approach to build a data type which can represent a circle or a rectangle:
+
+```
+data Shape {
+    Circle(int x, int y, double radius)
+    Rectangle(int x, int y, int length, int width)
+}
+```
+
+In C:
+
+```c
+
+struct Shape {
+    enum {Circle_t, Rectangle_t} t;
+    void **vars;
+}
+
+struct Shape
+Circle (int x, int y, double radius) {
+    struct Shape newData;
+    newData.t = Circle_t;
+    newData.vars = malloc(3 * sizeof(void *)); // allocate a void * for each variable
+    newData.vars[0] = malloc(sizeof(int));   // x
+    newData.vars[1] = malloc(sizeof(int));   // y
+    newData.vars[2] = malloc(sizeof(double));   // radius
+    *newData.vars[0] = x;
+    *newData.vars[1] = y;
+    *newData.vars[2] = radius;
+    return newData;
+}
+
+struct Shape
+Rectangle (int x, int y, int length, int width) {
+    struct Shape newData;
+    newData.t = Rectangle_t;
+    newData.vars = malloc(4 * sizeof(void *));
+    newData.vars[0] = malloc(sizeof(int));
+    newData.vars[1] = malloc(sizeof(int));
+    newData.vars[2] = malloc(sizeof(int));
+    newData.vars[3] = malloc(sizeof(int));
+    *newData.vars[0] = x;
+    *newData.vars[1] = y;
+    *newData.vars[2] = length;
+    *newData.vars[3] = width;
+    return newData;
+}
+```
+This seems a little more elegant to me, although it remains to be seen if it's superior in practice. Pulling data out of these guys should be simpler. Let's try some functions in f(C):
+
+```
+//assume pi is a Num type defined somewhere
+
+Num Area(Shape s) {
+    match(s.Circle) => pi*Double(s.radius*s.radius)
+    match(s.Rectangle) => Int(s.length * s.height)
+}
+
+// Note that having to write a constructor for the Num type is a 
+// little cumbersome; we might want to implement machinery to do this.
+// also note that it's getting quite silly to write x*x over and over - 
+// we'll probably wrap this in an operator.
+```
+
+Let's see that in C with our new formulation:
+
+```c
+#define PI 3.141592654
+
+struct Num
+Area(struct Shape s) {
+    if (s.t == Circle_t)
+        return PI * (*(double *)s.vars[2]) * (*(double *)s.vars[2]);
+    return (*(int *)s.vars[2]) * (*(int *)s.vars[3]);
+}
+```
+
+Although we have a somewhat hard-on-the-eyes pointer dereference situation, I think in the end this is cleaner (note that previously I had been smoothing that over). Pursuing this idea a bit further, we could do away with the num type entirely, instead defining a generic "data" type which we could customize to hold anything:
+
+```c
+struct data {
+    int oType;
+    int iType;
+    void **vars;
+}
+```
+
+"oType" and "iType" stand for inner and outer type: the former distinguishes different `data` from each other, and the latter distinguishes two `data` of the same type. (Presumably programmers won't require more than 4 billion data types, so an `int` should suffice to account for the type.)
+
+Then to define a specific data type, all we need is to define the relevant constructors and add appropriate `#define` statements to indicate the type possibilities:
+
+```c
+#include "fc_data.h"
+#define Shape_DATA_OTYPE 122
+#define Circle_DATA_ITYPE 123
+#define Rectangle_DATA_ITYPE 124
+
+struct data
+Circle_constructor (int x, int y, double radius) {
+    struct data newData;
+    newData.oType = Shape_DATA_OTYPE;
+    newData.iType = Circle_DATA_ITYPE;
+    [...]
+}
+```
+
+This is much more elegant and extensible; I'm leaning towards this. If everything's allocated on the heap anyway, why worry...
