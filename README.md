@@ -19,37 +19,37 @@ Here's an implementation of the same idea in C:
 ```c
 typedef struct BillingInfo BillingInfo; 
 struct BillingInfo {
-	enum { CreditCard_t, CashOnDelivery_t, Invoice_t } t;
-	union {
-		struct { int CardNumber; char *CardHolder; char *Address; } CreditCard;
-		/* note that we don't need a struct to hold CashOnDelivery */
-		struct { char *CustomerID; } Invoice;
-	} data;
+    enum { CreditCard_t, CashOnDelivery_t, Invoice_t } t;
+    union {
+        struct { int CardNumber; char *CardHolder; char *Address; } CreditCard;
+        /* note that we don't need a struct to hold CashOnDelivery */
+        struct { char *CustomerID; } Invoice;
+    } data;
 };
 
 BillingInfo 
 CreditCard(int CardNumber, char *CardHolder, char *Address) {
-	BillingInfo bi;
-	bi.t = CreditCard_t;
-	bi.data.CreditCard.CardNumber = CardNumber;
-	bi.data.CreditCard.CardHolder = CardHolder;
-	bi.data.CreditCard.Address = Address;
-	return bi;
+    BillingInfo bi;
+    bi.t = CreditCard_t;
+    bi.data.CreditCard.CardNumber = CardNumber;
+    bi.data.CreditCard.CardHolder = CardHolder;
+    bi.data.CreditCard.Address = Address;
+    return bi;
 }
 
 BillingInfo 
 CashOnDelivery(void) {
-	BillingInfo bi;
-	bi.t = CashOnDelivery_t;
-	return bi;
+    BillingInfo bi;
+    bi.t = CashOnDelivery_t;
+    return bi;
 }
 
 BillingInfo 
 Invoice(char *CustomerID) {
-	BillingInfo bi;
-	bi.t = Invoice_t;
-	bi.data.Invoice.CustomerID = CustomerID;
-	return bi;
+    BillingInfo bi;
+    bi.t = Invoice_t;
+    bi.data.Invoice.CustomerID = CustomerID;
+    return bi;
 }
 
 ```
@@ -58,9 +58,9 @@ As we can see, this is verbose and hides the simple idea that the data structure
 
 ```
 data BillingInfo {
-	CreditCard(String cardNumber, String cardHolder, String address)
-	CashOnDelivery()
-	Invoice(String customerID)
+    CreditCard(String cardNumber, String cardHolder, String address)
+    CashOnDelivery()
+    Invoice(String customerID)
 }
 ```
 
@@ -79,14 +79,14 @@ We could mirror this in C:
 
 ```c
 struct list {
-	int val;
-	struct list *next;
+    int val;
+    struct list *next;
 };
 
 int sumList(struct list *l) {
-	if (l.next == NULL)
-		return 0;
-	return l->val + sumList(l->next); 
+    if (l.next == NULL)
+        return 0;
+    return l->val + sumList(l->next); 
 }
 
 ```
@@ -95,12 +95,12 @@ Now in this case, the C version isn't significantly longer than the Haskell, nor
 
 ```
 int sumList(list *l) {
-	sumList (l : l->next == NULL) { 
-		return 0 
-	}
-	sumList (l) { 
-		return l->val + sumList(l->next) 
-	}
+    sumList (l : l->next == NULL) { 
+        return 0 
+    }
+    sumList (l) { 
+        return l->val + sumList(l->next) 
+    }
 }
 ```
 
@@ -110,8 +110,8 @@ In functional programming, the singly-linked list will be such a fundamental dat
 
 ```c
 struct list {
-	void *data;
-	struct list *next;
+    void *data;
+    struct list *next;
 }
 ```
 
@@ -129,12 +129,12 @@ Keep in mind that all of these operators are tentative, but we definitely want t
 
 ```
 int sumList(list!int l) {
-	sumList(l : !l) {
-		return 0
-	}
-	sumList(l) {
-		return .l + sumList(l..)
-	}
+    sumList(l : !l) {
+        return 0
+    }
+    sumList(l) {
+        return .l + sumList(l..)
+    }
 }
 
 ```
@@ -143,19 +143,19 @@ What if we simplified it a bit further? Note that I'm still just kinda spitballi
 
 ```
 int sumList(list!int l) {
-	match (!l) { return 0 }
-	match (l) { return .l + sumList(l..) }
+    match (!l) { return 0 }
+    match (l) { return .l + sumList(l..) }
 }
 ```
 
 Here I'm envisioning match to be a boolean function which may be a simple if but could allow us to do pattern matching, perhaps allow us to do more advanced Haskell-like pattern matching (e.g. multiple representations of the same data) at some future point.
 
-Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll use the => operator to declare that the final statement of a block is a return. We could simply make this default behavior, but this gives a clearer syntax anyway. Note that we're allowing a return to be explicitly declared if desired. This would give us:
+Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll use the => symbol to declare that the final statement of a block is a return. We could simply make this default behavior, but this gives a clearer syntax anyway. It might be desirable to have the => itself be optional - useful for clarification. We'll see. Note that we're allowing a return to be explicitly declared if desired. This would give us:
 
 ```
 auto sumList(list l) {
-	match (!l) => 0
-	match (l) => .l + sumList(l..)
+    match (!l) => 0
+    match (l) => .l + sumList(l..)
 }
 ```
 
@@ -175,41 +175,41 @@ Using our algebraic definitions from before, let's try to make one of these in f
 
 ```
 data list!auto {
-	empty()
-	cons(auto head, list!auto tail)
+    empty()
+    cons(auto head, list!auto tail)
 }
 ```
 
-By adopting a C++ style auto keyword, we are also allowing parameterized types. Any framework which can reliably infer the type of a variable, can also do all of the appropriate conversions and casts in the code.
+By adopting a C++ style auto keyword, we are also allowing parameterized types. Any framework which can reliably infer the type of a variable, can also do all of the appropriate conversions and casts in the code. It may also be desirable to let functions be defined multiple times for different types, but at least initially, we won't implement this.
 
 Just so we don't lose track of what we're going for, let's see how this would look in ANSI C code, and let's switch to lower case letters for a more C-style look:
 
 ```c
 typedef
 struct list_ {
-	enum {empty_t, cons_t} t; 
-	union {
-		struct { void *head; struct list_ *next; } cons;
-	} data;
+    enum {empty_t, cons_t} t; 
+    union {
+        struct { void *head; struct list_ *next; } cons;
+    } data;
 }
 List;
 
 List *
 empty(void) {
-	List *l = malloc(sizeof(List));
-	if (!l) exit(1);
-	l->t = empty_t;
-	return l;
+    List *l = malloc(sizeof(List));
+    if (!l) exit(1);
+    l->t = empty_t;
+    return l;
 }
 
 List *
 cons(void *a, List *next) {
-	List *l = malloc(sizeof(List));
-	if (!l) exit(1);
-	l->t = cons_t;
-	l->data.cons.head = a;
-	l->data.cons.next = next;
-	return l;
+    List *l = malloc(sizeof(List));
+    if (!l) exit(1);
+    l->t = cons_t;
+    l->data.cons.head = a;
+    l->data.cons.next = next;
+    return l;
 }
 ```
 
@@ -220,91 +220,92 @@ Now let's try to implement some fundamental list operations. We'll take the expr
 ```
 // (Restatement)
 data list!auto {
-	empty()
-	cons(auto head, list!auto tail)
+    empty()
+    cons(auto head, list!auto tail)
 }
 
 bool op(asBool)(list a) {
-	match(a.empty) => false
-	match(a.cons) => true
+    match(a.empty) => false
+    match(a.cons) => true
 }
 
 auto op(.)(list a)
-	match(a) => a.head
+    match(a) => a.head
 
 auto op(..)(list a)
-	match(a) => a.tail
+    match(a) => a.tail
 
-list op([])(auto a)
-	cons(a, empty())
+list op(~)(auto x, list a) => cons(x, a)
+
+list op([])(auto a) => a ~ empty()
 
 list op(++)(list a, list b) {
-	match(!a, b) => b
-	match(a, b) => cons(.a, a.. ++ b)
+    match(!a, b) =>                // at this point ++ is already defined,
+    match(a, b) => .a ~ (a.. ++ b) // so we can use it in our recursion
 }
 
 auto head(list a)
-	match(a) => .a
+    match(a) => .a
 
 list tail(list a)
-	match(a) => a..
+    match(a) => a..
 
 list init(list a) {
-	match(a : !a..) => empty()
-	match(a) => [.a] ~ init(a..)
+    match(a : !a..) => empty()
+    match(a) => .a ~ init(a..)
 }
 
 auto last(list a) {
-	match(a : !a..) => .a
-	match(a) => last(a..)
+    match(a : !a..) => .a
+    match(a) => last(a..)
 }
 ```
 
-A few things I've introduced here. For one, we've defined some operator overloaders; the syntax for this will be op(symbol)(params). Binary vs unary operators can be inferred from the parameters given. To be clear, the : symbol indicates "such that." Note that we're using the `.a` and `a..` syntax from above (and defined in the operator overloader functions). If that's confusing (or simply to keep it more C-like), we could use a struct-dereference style call. Also note that we have to inform our compiler that when evaluating a list as a boolean, we return true if in the C-version, `a->t != empty_t`. Realizing this is a valuable thing, I defined an op(asBool) function above. Alternatively we could use something like `match(a.cons)` or `match (a.empty)`, which would tell us which constructor was used to build `a`. This would probably be what we want in a data type with more than two possibilities. Either way, we have some pattern matching -- this may be somewhat primitive compared to what Haskell is doing, but it seems to work. Let's try a possible conversion of the above functions to C code. We'll skip over some of the operator overloaders and rename the other two to something readable -- in a "real" compiled-to-C version, these would probably be given generic (and ugly) names.
+A few things I've introduced here. For one, we've defined some operator overloaders; the syntax for this will be op(symbol)(params). Binary vs unary operators can be inferred from the parameters given. To be clear, the : symbol indicates "such that." Note that we're using the `.a` and `a..` syntax from above (and defined in the operator overloader functions). If that's confusing (or simply to keep it more C-like), we could use a struct-dereference style call. Also note that we have to inform our compiler that when evaluating a list as a boolean, we return true if in the C-version, `a->t != empty_t`. Realizing this is a valuable thing, I defined an `op(asBool)` function above (note that we'll probably make the default something like `bool op(asBool) (auto x) => true`). As our `op(asBool)` function tells us, we could use `match(a.cons)` or `match(a.empty)`, since the constructor names also match to boolean expressions which tell us which constructor was used to build `a`. This would probably be what we want in a data type with more than two possibilities. Either way, we have some pattern matching -- this may be somewhat primitive compared to what Haskell is doing, but it seems to work. Let's try a possible conversion of the above functions to C code. We'll skip over some of the operator overloaders and rename the other two to something readable -- in a "real" compiled-to-C version, these would probably be given generic (and ugly) names.
 
 ```c
 typedef List* list;
 
 list singleton(void *a) {
-	return cons(a, empty());
+    return cons(a, empty());
 }
 
 list concat(list a, list b) {
-	if (a->t == empty_t)
-		return b;
-	return cons(a->data.cons.head, concat(a->data.cons.tail, b));
+    if (a->t == empty_t)
+        return b;
+    return cons(a->data.cons.head, concat(a->data.cons.tail, b));
 }
 
 void *head(list l) {
-	if (l->t == cons_t)
-		return l->data.cons.head;
-	printf("Exception: calling head on an empty list\n");
-	exit(1);
+    if (l->t == cons_t)
+        return l->data.cons.head;
+    printf("Exception: calling head on an empty list\n");
+    exit(1);
 }
 
 list tail(list l) {
-	if (l->t == cons_t)
-		return l->data.cons.tail;
-	printf("Exception: calling tail on an empty list\n");
-	exit(1);
+    if (l->t == cons_t)
+        return l->data.cons.tail;
+    printf("Exception: calling tail on an empty list\n");
+    exit(1);
 }
 
 list init(list l) {
-	if (l->t == cons_t && l->data.cons.tail == NULL)
-		return empty();
-	if (l->t == cons_t)
-		return concat(singleton(l->data.cons.head), init(l->data.cons.tail));
-	printf("Exception: calling init on an empty list\n");
-	exit(1);
+    if (l->t == cons_t && l->data.cons.tail == NULL)
+        return empty();
+    if (l->t == cons_t)
+        return concat(singleton(l->data.cons.head), init(l->data.cons.tail));
+    printf("Exception: calling init on an empty list\n");
+    exit(1);
 }
 
 void *last(list l) {
-	if (l->t == cons_t && l->data.cons.tail == NULL)
-		return l->data.cons.head;
-	if (l->t == cons_t)
-		return last(l->data.cons.tail);
-	printf("Exception: calling last on an empty list\n");
-	exit(1);
+    if (l->t == cons_t && l->data.cons.tail == NULL)
+        return l->data.cons.head;
+    if (l->t == cons_t)
+        return last(l->data.cons.tail);
+    printf("Exception: calling last on an empty list\n");
+    exit(1);
 }
 ```
 
@@ -314,56 +315,54 @@ Obviously, much more needs to be done in order to solidify the ideas at work and
 
 ```
 list map(list a, function f) {
-	match(!a, f) => empty()
-	match(a, f) => [f(.a)] ++ map(a.., f)
+    match(!a, f) => empty()
+    match(a, f) => f(.a) ~ map(a.., f)
 }
 
 data Num {
-	Int(int i)
-	Double(double d)
+    Int(int i)
+    Double(double d)
 }
 
-bool op(asBool) (Num n) => true // note that we'll probably make this the default
-
 list!Num squareList(list!Num a) =>
-	map(a, lambda(x) => x*x)
+    map(a, lambda(x) => x*x)
 ```
 
 Here map is a function which takes a function (here declared generically as a simple type; this definition might need to be more robust) and a list, and returns a list where the function has been applied to each item in the list. The keyword 'lambda' in this case is fulfilling a similar function to 'match' in our normal function declarations. Assuming we have some pattern-matching capabilities in play, we could even make a pattern-matching lambda function:
 
 ```
 list!int intSquareList(list!Num a) =>
-	map( a,
-		lambda(x.Int) => x*x
-		lambda(x.Double) => int(x*x) 
-	   )
+    map(a,
+        lambda(x.Int) => x*x
+        lambda(x.Double) => int(x*x) 
+       )
 ```
 
 This would be functionally equivalent to:
 
 ```
 int intSquare(Num n) {
-	match(n.Int) => n*n
-	match(n.Double) => int(n*n)
+    match(n.Int) => n*n
+    match(n.Double) => int(n*n)
 }
 
 list!int intSquareList(list!Num a) =>
-	map(a, intSquare)
+    map(a, intSquare)
 ```
 
 Compiling code containing a lambda function to C might be relatively simple:
 
 ```c
 int lambda0(int x) {
-	return x*x;
+    return x*x;
 }
 
 list squareList(list l) {
-	if (l->t == empty_t)
-		return empty();
-	if (l->t == cons_t)
-		return concat(singleton(lambda0(l->data.cons.head)), 
-					  squareList(l->data.cons.tail));
+    if (l->t == empty_t)
+        return empty();
+    if (l->t == cons_t)
+        return concat(singleton(lambda0(l->data.cons.head)), 
+                      squareList(l->data.cons.tail));
 }
 ```
 
