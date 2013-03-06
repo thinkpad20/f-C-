@@ -118,18 +118,18 @@ struct list {
 Note that this may not actually be the internal representation of a list, especially if we create list using the algebraic type system (which is what we'll do - see below). Either way, let's assume that this can be denoted with a new primitive data type list (as with data, we may want to add an at sign to facilitate functional C being a strict superset of C). Let's also assume that we have some notation and operators that are essential for lists:
 
 ```
-list!int *l           // l a pointer to a struct list with void * effectively set to int *. Note we're using the ! syntax from D.
-boolean isEmpty = !l  // isEmpty is true (the ! operator on a list l is the same thing as "l->next == NULL")
-l = [1, 3, 5, 7]      // the compiler can read that l is a list of ints and construct it accordingly
-int a = .l            // a == 1
-list!int *l2 = l..    // l2 == {3, 5, 7}
+list!int a            // a is a pointer to a struct list (the * is implied). Internally it uses void *. Note we're using the ! syntax from D.
+boolean isEmpty = !a  // isEmpty is true (the ! operator on a list l is the same thing as "l->next == NULL")
+a = {1, 3, 5, 7}      // the compiler can read that a is a list of ints and construct it accordingly
+int i = .a            // . is the head operator. i == 1
+list!int b = a..    // .. is the tail operator. b == {3, 5, 7}
 ```
 
 Keep in mind that all of these operators are tentative, but we definitely want to have an easy way to denote the head and tail of a list. We'll get to the pattern matching stuff later (I hope). OK, now that we have some operators, let's see if we can simplify our sumList function:
 
 ```
-int sumList(list!int *l) {
-	sumList(l | !l) {
+int sumList(list!int l) {
+	sumList(l : !l) {
 		return 0
 	}
 	sumList(l) {
@@ -142,29 +142,21 @@ int sumList(list!int *l) {
 What if we simplified it a bit further? Note that I'm still just kinda spitballing...
 
 ```
-int sumList(list!int *l) {
-	match (!l) => { return 0 }
-	match (l) => { return .l + sumList(l..) }
+int sumList(list!int l) {
+	match (!l) { return 0 }
+	match (l) { return .l + sumList(l..) }
 }
 ```
 
-Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll declare that the final statement of any function is assumed to be a return (allowing a return to be explicitly declared if desired). This would give us:
+Here I'm envisioning match to be a boolean function which may be a simple if but could allow us to do pattern matching, perhaps allow us to do more advanced Haskell-like pattern matching (e.g. multiple representations of the same data) at some future point.
+
+Now let's employ several more steps of evolution. We'll allow curly braces to be omitted as long as the function body is only one line. We'll borrow the keyword "auto" and use it in the D/C++ way, to indicate that the return value is inferred. Similarly, we won't explicitly define what kind of list l is. We'll drop the * from the list variable -- as a primitive data type, it's pointer-ness should be implied anyway (there could perhaps be special mechanisms to create non-heap list nodes). And we'll use the => operator to declare that the final statement of a block is a return. We could simply make this default behavior, but this gives a clearer syntax anyway. Note that we're allowing a return to be explicitly declared if desired. This would give us:
 
 ```
 auto sumList(list l) {
 	match (!l) => 0
 	match (l) => .l + sumList(l..)
 }
-```
-
-Now we're really looking quite different! Let's restate our list examples with the clean syntax:
-
-```
-list a                // note that list is intrinsically parametric, so not declaring a type simply means it will be inferred later.
-boolean isEmpty = !a  // isEmpty is true
-a = [1, 3, 5, 7]      // At this point, the type of a has been recorded and cannot be changed.
-int i = .a            // i == 1
-auto b = a..          // b == {3, 5, 7}. "list b = a.." would also be valid.
 ```
 
 Let's imagine how this would look given an algebraic-type definition of a list. In Haskell, a list is defined as:
@@ -223,9 +215,10 @@ cons(void *a, List *next) {
 
 So we can see that if we imagine including a "typedef List* list;" statement to our C code, then we are effectively modeling (assuming the dereferencing is automatic) the list type in functional C.
 
-Now let's try to implement some fundamental list operations. We'll start by restating our definition of list in functional C.
+Now let's try to implement some fundamental list operations. We'll take the expression data.type to be a boolean expression which evaluates to true if the data is of the specified type.
 
 ```
+// (Restatement)
 data list!auto {
 	empty()
 	cons(auto head, list!auto tail)
@@ -236,7 +229,6 @@ bool op(asBool)(list a) {
 	match(a.cons) => true
 }
 
-// head and tail are defined by the names of the arguments to the cons constructor
 auto op(.)(list a)
 	match(a) => a.head
 
@@ -247,8 +239,8 @@ list op([])(auto a)
 	cons(a, empty())
 
 list op(++)(list a, list b) {
-	match(!a) => b
-	match(a) => cons(.a, a.. ++ b)
+	match(!a, b) => b
+	match(a, b) => cons(.a, a.. ++ b)
 }
 
 auto head(list a)
@@ -262,7 +254,7 @@ list init(list a) {
 	match(a) => [.a] ~ init(a..)
 }
 
-auto last(list l) {
+auto last(list a) {
 	match(a : !a..) => .a
 	match(a) => last(a..)
 }
@@ -317,3 +309,62 @@ void *last(list l) {
 ```
 
 Note that our simplistic "exceptions" are thrown whenever we fail to satisfy any of the possible matches. Also note that the functional C code for head, tail, init and last is 15 lines, while the ANSI C for the same functions is double that, and considerably less readable. The difference is quite a bit more pronounced when the definition and constructors of the List data type are also included.
+
+Obviously, much more needs to be done in order to solidify the ideas at work and the syntax - not to mention implementing more advanced functional concepts. One that we can address next is lambda functions. Let's imagine how one of them might look in a f(C) code:
+
+```
+list map(list a, function f) {
+	match(!a, f) => empty()
+	match(a, f) => [f(.a)] ++ map(a.., f)
+}
+
+data Num {
+	Int(int i)
+	Double(double d)
+}
+
+bool op(asBool) (Num n) => true // note that we'll probably make this the default
+
+list!Num squareList(list!Num a) =>
+	map(a, lambda(x) => x*x)
+```
+
+Here map is a function which takes a function (here declared generically as a simple type; this definition might need to be more robust) and a list, and returns a list where the function has been applied to each item in the list. The keyword 'lambda' in this case is fulfilling a similar function to 'match' in our normal function declarations. Assuming we have some pattern-matching capabilities in play, we could even make a pattern-matching lambda function:
+
+```
+list!int intSquareList(list!Num a) =>
+	map( a,
+		lambda(x.Int) => x*x
+		lambda(x.Double) => int(x*x) 
+	   )
+```
+
+This would be functionally equivalent to:
+
+```
+int intSquare(Num n) {
+	match(n.Int) => n*n
+	match(n.Double) => int(n*n)
+}
+
+list!int intSquareList(list!Num a) =>
+	map(a, intSquare)
+```
+
+Compiling code containing a lambda function to C might be relatively simple:
+
+```c
+int lambda0(int x) {
+	return x*x;
+}
+
+list squareList(list l) {
+	if (l->t == empty_t)
+		return empty();
+	if (l->t == cons_t)
+		return concat(singleton(lambda0(l->data.cons.head)), 
+					  squareList(l->data.cons.tail));
+}
+```
+
+Essentially, wherever we have a lambda function, we rewrite it as a "real" function and call it instead. (Or presumably, and definitely for a case like this, we might simply inline the function).
