@@ -112,15 +112,16 @@ struct cTokenizer {
 	}
 
 	bool matchPartialCharConstant(string str) {
-		return (str.length < 3 && str[0] == '\'');
+		return (str[0] == '\'' && str[$-1] != '\'');
 	}
 	bool matchCharConstant(string str) {
-		return (str.length == 3 && str[0] == '\'' && str[$-1] == '\'');
+		return ((str.length == 3 || str.length == 4) 
+				 && str[0] == '\'' && str[$-1] == '\'');
 	}
-
+	
 	bool matchWhiteSpace(string str) {
 		foreach(ch; str)
-			if (ch != ' ' && ch != '\n' && ch != '\r' && ch != '\t')
+			if (ch != ' ' && ch != '\n' && ch != '\r' && ch != '\t' && ch != '\f')
 				return false;
 		return true;
 	}

@@ -527,3 +527,22 @@ Circle_constructor (int x, int y, double radius) {
 ```
 
 This is much more elegant and extensible; I'm leaning towards this. If everything's allocated on the heap anyway, why worry? :) Also this allows us to define new datatypes without recompiling, or even create "anonymous" temporary datatypes inside of a single context! Perfect for an interpreter.
+
+However, in our code it might be more convenient (and possibly faster) to create structs for casting purposes. Ex:
+
+```c
+struct Circle {int x; int y; double r;};
+struct Rectangle {int x; int y; int length; int width;};
+
+struct datatype
+Circle_constructor(int x; int y; double r) {
+    struct Circle c = {x, y, r};
+    struct datatype ret;
+    ret.oType = SHAPE;
+    ret.iType = CIRCLE;
+    ret.data = Malloc(sizeof(c));
+    memcpy(*ret.data, c, sizeof(c));
+    return ret;
+}
+
+```
