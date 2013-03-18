@@ -43,7 +43,7 @@ List
 tail(List lst) {
 	if (lst.oType == List_OT) {
 		if (lst.iType == List_Cons_IT)
-			return ((struct Cons *)lst.data)->tail;
+			return ((Cons)lst.data)->tail;
 		fprintf(stderr, "Exception: calling tail on empty list\n");
 		exit(1);
 	}
@@ -79,6 +79,14 @@ last(List lst) {
 		fprintf(stderr, "Exception: calling last on empty list\n");
 		exit(1);
 	}
+	fprintf(stderr, "Exception: incorrect datatype, expected type List\n");
+	exit(1);
+}
+
+bool
+isAuto (struct datatype a) {
+	if (a.oType == List_OT)
+		return (a.iType == List_Empty_IT);
 	fprintf(stderr, "Exception: incorrect datatype, expected type List\n");
 	exit(1);
 }

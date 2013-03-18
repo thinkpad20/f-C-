@@ -1,0 +1,36 @@
+@data Shape!auto {
+	Circle(int x, int y, double r);
+	Square(int x, auto y, auto len);
+	Rectangle(int x, int y, int l, int w);
+	Triangle(int x1, int y1, int x2, int y2, int x3, int y3);
+}
+
+void PrintShape(Shape!int s) {
+	@match(s : Circle) {
+		printf("%d\n", s.x);
+	}
+}
+
+int main() {
+	return 0;
+}
+/*
+quicksort []     = []
+quicksort (p:xs) = (quicksort lesser) ++ [p] ++ (quicksort greater)
+    where
+        lesser  = filter (< p) xs
+        greater = filter (>= p) xs
+
+in f(C):
+
+List quicksort(List l) {
+	@match(l : Empty) return Empty();
+	@match(_) return quicksort(lesser) ~~ l.head ~~ quicksort(greater);
+	@where {
+		@func lt = @lambda(auto a) return a < p;
+		@func geq = @lambda(auto a) return a >= p;
+		List lesser = filter(lt, l.tail);
+		List greater = filter(geq, l.tail);
+	}
+}
+*/

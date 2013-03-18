@@ -61,7 +61,7 @@ struct Tokenizer {
 	Token[] tokens;
 
 	void init() {
-		string[] keywordList = ["static", "int", "char", "boolean", "void", "true", "false", 
+		string[] keywordList = ["static", "int", "char", "bool", "void", "true", "false", 
 								"if", "else", "while", "for", "switch", "return", "auto", "break", 
 								"case", "const", "continue", "default", "do", "double", "enum", "extern", 
 								"float", "goto", "long", "register", "short", "signed", "sizeof", "struct",

@@ -1,3 +1,6 @@
+#ifndef __List_H_
+#define __List_H_
+
 #include "datatype.h"
 
 /* Type identifiers */
@@ -6,7 +9,6 @@
 #define List_Cons_IT 104
 
 typedef struct datatype List;
-typedef struct datatype Auto;
 
 List
 Empty_constructor(void);
@@ -22,3 +24,8 @@ tail(List a);
 
 List 
 init(List a);
+
+bool
+isEmpty(List a);
+
+#endif /* __List_H_ */

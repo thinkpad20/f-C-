@@ -1,40 +1,39 @@
-data list!auto {
-	empty()
-	cons(auto head, list!auto tail)
+@data List!auto {
+	Empty()
+	Cons(auto head, List!auto tail)
 }
 
-bool op(asBool)(list a) {
-	match(a.empty) => false
-	match(a.cons) => true
+bool op(asBool)(List a) {
+	@match(a.Empty) => false
+	@match(a.Cons) => true
 }
 
-// head and tail are defined by the names of the arguments to the cons constructor
-auto op(.)(list a)
-	match(a) => a.head
+auto op(.)(List a)
+	@match(a) => a.head
 
-auto op(..)(list a)
-	match(a) => a.tail
+auto op(..)(List a)
+	@match(a) => a.tail
 
-list op([])(auto a)
-	cons(a, empty())
+List op([])(auto a)
+	Cons(a, Empty())
 
-list op(++)(list a, list b) {
-	match(!a) => b
-	match(a) => cons(.a, a.. ++ b)
+List op(++)(List a, List b) {
+	@match(!a) => b
+	@match(a) => Cons(.a, a.. ++ b)
 }
 
-auto head(list a)
-	match(a) => .a
+auto head(List a)
+	@match(a) => .a
 
-list tail(list a)
-	match(a) => a..
+List tail(List a)
+	@match(a) => a..
 
-list init(list a) {
-	match(a : !a..) => empty()
-	match(a) => [.a] ~ init(a..)
+List init(List a) {
+	@match(a : !a..) => Empty()
+	@match(a) => [.a] ~ init(a..)
 }
 
-auto last(list l) {
-	match(a : !a..) => .a
-	match(a) => last(a..)
+auto last(List l) {
+	@match(a : !a..) => .a
+	@match(a) => last(a..)
 }

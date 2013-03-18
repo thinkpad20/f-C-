@@ -1,0 +1,12 @@
+When we encounter a @data definition, record:
+
+Outer type name
+Inner type names
+Paramaterization, if any
+
+
+When we encounter an f(C) type declaration, record:
+
+Variable name
+Outer type
+If type is parameterized, record what this variable's parameter types are

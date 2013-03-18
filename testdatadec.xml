@@ -1,0 +1,59 @@
+#define Shape_L 100
+#define Shape_Circle_T 101
+
+struct Circle {
+    int x;
+    int y;
+    double r;
+}
+typedef struct Circle * Circle_P
+
+#define Shape_Rectangle_T 102
+
+struct Rectangle {
+    int x;
+    int y;
+    int l;
+    int w;
+}
+typedef struct Rectangle * Rectangle_P
+
+#define Shape_NoShape_T 103
+
+struct NoShape {
+}
+typedef struct NoShape * NoShape_P
+
+Shape
+Circle_constructor(int x, int y, double r)
+    Shape newShape;
+    newShape.oType = Shape_T;
+    newShape.iType = Shape_Circle_T;
+    newShape.data = Malloc(sizeof(struct Circle));
+    ((Circle_P)newShape.data)->x = x
+    ((Circle_P)newShape.data)->y = y
+    ((Circle_P)newShape.data)->r = r
+    return newShape;
+}
+
+Shape
+Rectangle_constructor(int x, int y, int l, int w)
+    Shape newShape;
+    newShape.oType = Shape_T;
+    newShape.iType = Shape_Rectangle_T;
+    newShape.data = Malloc(sizeof(struct Rectangle));
+    ((Rectangle_P)newShape.data)->x = x
+    ((Rectangle_P)newShape.data)->y = y
+    ((Rectangle_P)newShape.data)->l = l
+    ((Rectangle_P)newShape.data)->w = w
+    return newShape;
+}
+
+Shape
+NoShape_constructor()
+    Shape newShape;
+    newShape.oType = Shape_T;
+    newShape.iType = Shape_NoShape_T;
+    return newShape;
+}
+
