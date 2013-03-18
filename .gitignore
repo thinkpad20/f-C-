@@ -1,2 +1,7 @@
 ignore
 cTokenizer
+effofC*
+whatToRecord.txt
+*.txt
+*.xml
+test*
