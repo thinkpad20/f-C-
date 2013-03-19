@@ -1,6 +1,6 @@
 import std.stdio, std.string, std.conv, std.algorithm, fcTokenizer, symbolTable;
 
-bool showReports = false;
+bool showReports = true;
 int next, indentation, ifStatementCount, whileCount, numClassVars, typeNum = 100;
 Token[] tokens;
 string[] outputLines;
@@ -23,6 +23,11 @@ string constructorTemplate;
 
 outerType[] types;
 
+class TempPool {
+	static int count;
+	
+}
+
 void init() {
 	varTypes = ["long", "short", "signed", "unsigned", "int", "char",
 				"void", "bool", "float", "double", "identifier", "auto"];
@@ -44,7 +49,8 @@ void writeConstructor(outerType ot, innerType it) {
 	writeCLine(format("    %s new%s;", ot.type, ot.type));
 	writeCLine(format("    new%s.iType = %s_%s_T;", ot.type, ot.type, it.type));
 	if (it.numParams() > 0)
-		writeCLine(format("    new%s.data = Malloc(sizeof(struct %s_%s));", ot.type, ot.type, it.type));
+		writeCLine(format("    new%s.data = Malloc(sizeof(struct %s_%s));", 
+							ot.type, ot.type, it.type));
 	foreach(var; it.vars) {
 		writeCLine(format("    ((%s_%s_P)new%s.data)->%s = %s;", 
 			ot.type, it.type, ot.type, var[1], var[1]));
@@ -64,7 +70,8 @@ void writeStruct(outerType ot, innerType it) {
 				writeCLine("    void *" ~ var[1] ~ ";");
 		}
 		writeCLine("};");
-		writeCLine(format("typedef struct %s_%s * %s_%s_P;\n", ot.type, it.type, ot.type, it.type));
+		writeCLine(format("typedef struct %s_%s * %s_%s_P;\n", 
+						ot.type, it.type, ot.type, it.type));
 	}
 }
 
@@ -142,20 +149,20 @@ bool isFCType(Token t) {
 }
 
 bool isKeywordConstant(Token t) {
-	return t.type == "true" || t.type == "false" || t.type == "null" || t.type == "this";
+	return t.type == "true" || t.type == "false" 
+	|| t.type == "null" || t.type == "this";
 }
 
-//bool isTerm(Token t) {
-//	return t.type == "integerConstant" || t.type == "stringConstant" || isKeywordConstant(t)
-//					|| t.type == "identifier" || t.type == "(" || isUnaryOp(t);
-//}
+outerType isConstructor(Token t) {
+	foreach(ot; outerTypeDict.values) {
+		if (ot.hasInnerType(t.symbol) && tokens[next-1].symbol != ":")
+			return ot;
+	}
+	return null;
+}
 
 bool isConstructorDec() {
 	return isTerminal(tokens[next], "identifier") && isTerminal(tokens[next+1], "(");
-}
-
-bool isFCObject(Token t) {
-	return false;
 }
 
 /* </STATEMENT COMPILERS> */
@@ -182,72 +189,264 @@ void compileFunctionHeader() {
 void compileFunctionBody() {
 	// start with the opening brace, and continue until we've encountered the last closing brace
 	writeCLine(demand("{").symbol);
+	string varDecs, funcBody;
 	int braceCount=1;
-	Entry e;
+	Entry e, e2;
+	int declaredTemps = 0, declaredIters = 0;
+	outerType ot;
+	bool newStatement;
 	while (next < tokens.length && braceCount != 0) {
 		report("LOOP");
-		writeln("processing: ", tokens[next].symbol);
+		report("processing: " ~ tokens[next].symbol);
+		//look ahead to the end of the line to see if there are any constructors;
+		// if so this may require us writing out some additional statements.
+		if (newStatement)
+			scanForPreDecs(funcBody);
+
 		if (isTerminal(tokens[next], "{")) {
-			writeCLine(demand("{").symbol);
+			funcBody ~= demand("{").symbol ~ "\n";
 			++braceCount;
 		}
 		else if (isTerminal(tokens[next], "}")) {
-			writeCLine(demand("}").symbol);
+			funcBody ~= demand("}").symbol ~ "\n";
 			--braceCount;
 		}
 		else if (isTerminal(tokens[next], "@match")) {
-			e = processMatch();
-			writeCInLine(format("if(%s.iType == %s_%s_T)", 
-						e.symbol,
-						e.oType.type,
-						e.currentIType.type));
+			processMatch(funcBody);
 		}
-		else if (isFCObject(tokens[next])) {
-			report("1");
-			e = sts.lookup(tokens[next++].symbol);
-			// at this point, test if we're accessing a member of the object.
-			if (isTerminal(tokens[next], ".")) {
-
-			} else {
-
-			}
-
-			//writeCInLine(format("((%s_%s_P)%s)", 
-			//	currentObject.oType.type, 
-			//	currentIType.type, obj));
+		else if (isFCType(tokens[next])) {
+			convertFCType(varDecs);
 		}
 		else if (e = sts.lookup(tokens[next].symbol), e !is null) {
-			writeln("found a symbol ", e.symbol, " in the symbolTable");
-			if (isTerminal(tokens[++next], ".")) {//are we accessing a member?
-				demand(".");
-				// check what the type of the member it's accessing is
-				string fieldName = demand("identifier").symbol;
-				string typ = e.currentIType.getType(fieldName);
-				if (typ == "auto") {
-					typ = e.pType;
-					writeCInLine(format("*((%s *)(((%s_%s_P)%s.data)->%s))",
-						typ, e.oType.type, e.currentIType.type, e.symbol, fieldName));
-				} else {
-					writeCInLine(format("((%s_%s_P)%s.data)->%s",
-						e.oType.type, e.currentIType.type, e.symbol, fieldName));
-				}
+			++next;
+			//writeln("found a symbol ", e.symbol, " in the symbolTable");
+			if (isTerminal(tokens[next], ".")) {//are we accessing a member?
+				convertMemberAccess(e, funcBody);
+			} else if (isTerminal(tokens[next], "=")) { // assignment
+				convertFCAssignment(e, e2, varDecs, funcBody, declaredTemps, declaredIters);
+			} else { // then it's being used as-is as an argument
+				funcBody ~= e.symbol;
 			}
 
 		}
+		else if (ot = isConstructor(tokens[next]), ot !is null) {
+			Entry tempE = new Entry("temp", ot);
+			convertConstructor(tempE, varDecs, funcBody, declaredTemps, false);
+		}
 		else {
-			string thingy = tokens[next++].symbol;
-			writeln("unrecognized input: ", thingy);
-			writeCInLine(thingy);
-			if (thingy == ",")
-				writeCInLine(" ");
-			if (thingy == ";")
-				writeCLine("");
+			string thingy = tokens[next].symbol;
+			//writeln("unrecognized input: ", thingy);
+			funcBody ~= thingy ~ " ";
+			if (thingy == ";") {
+				newStatement = true;
+				funcBody ~= "\n";
+			}
+			next++;
 		}
 	}
-	writeCLine("");
+	writeCInLine(varDecs ~ "\n" ~ funcBody);
 }
 
-Entry processMatch() {
+void scanForPreDecs(ref string funcBody) {
+	outerType ot;
+	string dummy1, dummy2; int dummy3;
+	int save = next;
+	//for each ;, do one pass where we don't write anything except
+	// predeclarations. then a second pass where we act as normal.
+	while (next < tokens.length && tokens[next].symbol != ";") {
+		// we'll just write the "pre-declarations" that need to happen
+		// to facilitate the constructor call.
+		if (isTerminal(tokens[next], "@match")) {
+			processMatch(funcBody, true);
+		}
+		else if (ot = isConstructor(tokens[next]), ot !is null) {
+			Entry tempE = new Entry("temp", ot);
+			writeln("gonna make a constructor for an ", ot.type);
+			funcBody ~= convertConstructor(tempE, dummy1, dummy2, 
+											dummy3, false);
+		}
+		else {
+			next++;
+		}
+	}
+	next = save;
+}
+
+void convertFCAssignment(Entry e, Entry e2, ref string varDecs, 
+					ref string funcBody, ref int declaredTemps, 
+					ref int declaredIters) {
+	++next; // skip the = sign
+	if (e.oType.hasInnerType(tokens[next].symbol)) { // constructor
+		report("converting a constructor");
+		convertConstructor(e, varDecs, funcBody, declaredTemps, true);
+		report("finished converting constructor");
+	} else if (isTerminal(tokens[next], "{")) { // list-specific constructor
+		report("converting an initializer list");
+		convertInitializerList(e, varDecs, funcBody, 
+			declaredTemps, declaredIters);
+	} else if (tokens[next].category == TokenCat.STRCONST) {
+		convertStringConstant(e, varDecs, funcBody, 
+			declaredTemps, declaredIters);
+	} else if (e2 = sts.lookup(tokens[next].symbol), e2) { 
+			// assignment to another object
+			if (e2.oType.type == e.oType.type) {
+				writeln("copy constructor invoked here?");
+				funcBody ~= e.symbol ~ " = " ~ e2.symbol ~ ";\n";
+			} else
+				throw new Exception("Type mismatch!");
+	} else
+		throw new Exception("Invalid assignment");
+}
+
+void convertFCType(ref string varDecs) {
+	string varName, paramT;
+	outerType ot = outerTypeDict[tokens[next++].symbol]; // get the OT
+	// if it's a parametric type, we require the type to be declared
+	if (ot.isParametric) {
+		demand("!");
+		paramT = tokens[next++].symbol;
+		varName = tokens[next++].symbol;
+		sts.addSymbol(varName, ot, paramT);
+	} else {
+		varName = tokens[next++].symbol;
+		sts.addSymbol(varName, ot);
+	}
+	varDecs ~= format("%s %s;\n", ot.type, varName);
+}
+
+void convertMemberAccess(Entry e, ref string funcBody) {
+	demand(".");
+	// check what the type of the member it's accessing is
+	string fieldName = demand("identifier").symbol;
+	string typ = e.currentIType.getType(fieldName);
+	if (typ == "auto") {
+		typ = e.pType;
+		funcBody ~= format("*((%s *)(((%s_%s_P)%s.data)->%s))",
+			typ, e.oType.type, e.currentIType.type, e.symbol, fieldName);
+	} else {
+		funcBody ~= format("((%s_%s_P)%s.data)->%s",
+			e.oType.type, e.currentIType.type, e.symbol, fieldName);
+	}
+}
+
+string getNextArg() {
+	Entry e;
+	string arg;
+	while (tokens[next].symbol != "," && tokens[next].symbol != ")") {
+		if (e = sts.lookup(tokens[next].symbol), e !is null) {
+				++next;
+				if (isTerminal(tokens[next], "."))
+					convertMemberAccess(e, arg);
+				else
+					arg ~= e.symbol;
+		} else {
+			arg = tokens[next++].symbol;
+		}
+	}
+	return arg;
+}
+
+string convertConstructor(Entry e, ref string varDecs, 
+						ref string funcBody, ref int declaredTemps,
+						bool assignment) {
+	// find the list of variables expected for this inner type.
+	int usedTemps = 0;
+	innerType it = e.oType.getInnerType(tokens[next++].symbol);
+	demand("("); // get the opening parens
+	int paramCount = 0;
+	string args = "";
+	string preDecs;
+	while (paramCount < it.numParams()) {
+		report("x1");
+		string arg = getNextArg();
+		if (it.vars[paramCount][0] == "auto") {
+			report("x2");
+			if (++usedTemps > declaredTemps) {
+				++declaredTemps;
+				varDecs ~= format("void *temp%s;\n", usedTemps);
+			}
+			preDecs ~= format("temp%s = Malloc(sizeof(%s));\n", 
+								usedTemps, e.pType);
+			preDecs ~= format("*(%s *)temp%s = %s;\n", e.pType, usedTemps, 
+				arg);
+			args ~= format("temp%s", usedTemps);
+		} else {
+			args ~= arg;
+		}
+		++paramCount;
+		report("x3");
+		if (paramCount != it.numParams()) {
+			args ~= demand(",").symbol;
+		}
+	}
+	demand(")");
+	if (assignment) funcBody ~= e.symbol ~ " = ";
+	funcBody ~= format("%s_%s_constructor(%s)", e.oType.type, it.type, args);
+
+	return preDecs;
+}
+
+void convertInitializerList(Entry e, ref string varDecs, 
+							ref string funcBody, ref int declaredTemps,
+							ref int declaredIters) {
+	if (declaredTemps == 0) {
+		varDecs ~= "void *temp1;\n";
+		++declaredTemps;
+	}
+	if (declaredIters == 0) {
+		varDecs ~= "int __it1;\n";
+		++declaredIters;
+	}
+	string arrDec = format("%s %svals[] = {", e.pType, e.symbol);
+	demand("{");
+	int numItems = 0;
+	//for now, we'll only allow primitives to be declared here.
+	while(!isTerminal(tokens[next], "}")) {
+		if (isTerminal(tokens[next], ","))
+			++numItems;
+		arrDec ~= tokens[next++].symbol;
+	}
+	arrDec ~= demand("}").symbol ~ ";\n";
+	varDecs ~= arrDec;
+	funcBody ~= e.symbol ~ " = List_Empty_constructor();\n";
+	funcBody ~= format("for(__it1 = %s; __it1 >= 0; --__it1) {\n"
+						~ "temp1 = Malloc(sizeof(%s));\n"
+	    				~ "*(%s*)temp1 = %svals[__it1];\n"
+	    				~ "%s = List_Cons_constructor(temp1, %s);\n}\n",
+	    				numItems, e.pType, e.pType, e.symbol, e.symbol, e.symbol);
+	demand(";");
+}
+
+void convertStringConstant(Entry e, ref string varDecs, 
+							ref string funcBody, ref int declaredTemps,
+							ref int declaredIters) {
+	if (e.pType != "char")
+		throw new Exception("You cannot use a string literal without a char list.");
+	if (declaredTemps == 0) {
+		varDecs ~= "void *temp1;\n";
+		++declaredTemps;
+	}
+	if (declaredIters == 0) {
+		varDecs ~= "int __it1;\n";
+		++declaredIters;
+	}
+	string arrDec = format("char %schars[] = \"", e.symbol);
+	ulong numItems = tokens[next].str.length;
+	arrDec ~= tokens[next++].str ~ "\"";
+	//for now, we'll only allow primitives to be declared here.
+	arrDec ~= ";\n";
+	varDecs ~= arrDec;
+	funcBody ~= e.symbol ~ " = List_Empty_constructor();\n";
+	funcBody ~= format("for(__it1 = %s; __it1 >= 0; --__it1) {\n"
+						~ "temp1 = Malloc(sizeof(%s));\n"
+	    				~ "*(%s*)temp1 = %schars[__it1];\n"
+	    				~ "%s = List_Cons_constructor(temp1, %s);\n}\n",
+	    				numItems-1, e.pType, e.pType, e.symbol, e.symbol, e.symbol);
+	demand(";");
+
+}
+
+Entry processMatch(ref string funcBody, bool readOnly = false) {
 	++next; // skip over the "@match"
 	demand("(");
 	string name = demand("identifier").symbol;
@@ -260,6 +459,11 @@ Entry processMatch() {
 	} else {
 		throw new Exception("Symbol " ~ name ~ " is undefined.");
 	}
+	if (!readOnly)
+		funcBody ~= format("if(%s.iType == %s_%s_T)", 
+								e.symbol,
+								e.oType.type,
+								e.currentIType.type);
 	return e;
 }
 
@@ -293,63 +497,60 @@ string processType(bool isReturnType = false) {
 	return typeName;
 }
 
-void compileParameters(innerType it) {
-	writeIndented("<parameters>\r\n");
-	++indentation;
+void compileParameters(innerType it, bool skip = false) {
 	while (next < tokens.length && isType(tokens[next])) {
-		string paramType = writeXML(tokens[next++]).symbol; // parameter type (int, char, etc)
-		string paramName = writeXML(demand("identifier")).symbol; // parameter name
-		it.addParam(paramType, paramName);
+		string paramType = tokens[next++].symbol; // parameter type (int, char, etc)
+		if (isTerminal(tokens[next], "!")) {
+			demand("!"); next++;
+			//paramType ~= "!" ~ tokens[++next].symbol;
+			//++next;
+		}
+		string paramName = demand("identifier").symbol; // parameter name
+		if (!skip) it.addParam(paramType, paramName);
 		if (next < tokens.length && isTerminal(tokens[next], ","))
-			writeXML(tokens[next++]);
+			next++; // skip the comma
 		else
 			break;
 	}
-	--indentation;
-	writeIndented("</parameters>\r\n");
 }
 
 /* <HIGHEST-LEVEL STRUCTURES> */
-void compileData() {
-	writeIndented("<@data>\r\n");
-	++indentation;
-	writeXML(demand("@data"));
-	compileDataInfo();
-	writeXML(demand("{"));
+void compileData(bool skip = false) {
+	demand("@data");
+	compileDataInfo(skip);
+	demand("{");
 	while (isConstructorDec())
-		compileConstructorDec();
-	writeXML(demand("}"));
-	--indentation;
-	writeIndented("</@data>\r\n");
+		compileConstructorDec(skip);
+	demand("}");
 }
 
-void compileDataInfo() {
-	string dataInfo = writeXML(demand("identifier")).symbol; // get datatype name
+void compileDataInfo(bool skip = false) {
+	string dataInfo = demand("identifier").symbol; // get datatype name
 	outerType t = new outerType(dataInfo, typeNum++);
 	if (isTerminal(tokens[next], "!")) { // if parameterized
 		t.isParametric = true;
-		writeXML(demand("!"));
-		string typ = writeXML(demandOneOf(varTypes)).symbol; //this will only be auto for now
+		demand("!");
+		string typ = demandOneOf(varTypes).symbol; //this will only be auto for now
 		if (typ != "auto")
 			throw new Exception("Parametric types must be declared with auto.");
 	}
-	types ~= t;
-	outerTypeDict[dataInfo] = t; // add it to the type dictionary
-	varTypes ~= dataInfo; // add it to the type list
+	if (!skip) {
+		types ~= t;
+		outerTypeDict[dataInfo] = t; // add it to the type dictionary
+		varTypes ~= dataInfo; // add it to the type list
+	}
 }
 
-void compileConstructorDec() {
-	writeIndented("<constructorDec>\r\n");
-	++indentation;
-	string iType = writeXML(demand("identifier")).symbol; // name of the constructor
-	innerType newInner = types[$-1].addInnerType(iType, typeNum++);
+void compileConstructorDec(bool skip = false) {
+	//if (!skip) writeIndented("<constructorDec>\r\n");
+	innerType newInner;
+	string iType = demand("identifier").symbol; // name of the constructor
+	if (!skip) newInner = types[$-1].addInnerType(iType, typeNum++);
 	// get the parameters
-	writeXML(demand("("));
-	compileParameters(newInner);
-	writeXML(demand(")"));
-	writeXML(demand(";")); // sadly, semicolons are probably necessary for now
-	--indentation;
-	writeIndented("</constructorDec>\r\n");
+	demand("(");
+	compileParameters(newInner, skip);
+	demand(")");
+	demand(";"); // sadly, semicolons are probably necessary for now
 }
 
 /* </HIGHEST-LEVEL STRUCTURES> */
@@ -382,6 +583,39 @@ void writeDeclarations() {
 	}
 }
 
+void compileDataDecs() {
+	int save = next;
+	int dataDecCount = 0;
+	while (next < tokens.length) {
+		if (isTerminal(tokens[next], "@data")) {
+			compileData();
+			dataDecCount++;
+		}
+		else
+			next++;
+	}
+	writeDeclarations();
+	next = save;
+	//writefln("Found and compiled %s datatypes", dataDecCount);
+}
+
+void compileFunctions() {
+	int save = next;
+	int funcCount;
+	while (next < tokens.length) {
+		if (isTerminal(tokens[next], "@data"))
+			compileData(true); //skip over it
+		else if (isType(tokens[next])) {
+			compileFunctionHeader();
+			compileFunctionBody();
+			funcCount++;
+		}
+		else
+			next++;
+	}
+	next = save;
+}
+
 void main(string[] args) {
 	init();
 	Tokenizer t;
@@ -392,18 +626,13 @@ void main(string[] args) {
 		t.lex();
 		tokens = t.getTokens();
 		reset();
-		compileData();
-		writeDeclarations();
-		compileFunctionHeader();
-		compileFunctionBody();
+		compileDataDecs();
+		compileFunctions();
 		auto outputFile = File(filenameRoot ~ ".c", "w");
-		//foreach(str; outputLines)
-		//	outputFile.write(str);
-		foreach(type; types) {
-			write(type);
-		}
+		//foreach(type; types) {
+		//	write(type);
+		//}
 		foreach(ln; outputC) {
-			//write(ln);
 			outputFile.write(ln);
 		}
 		//foreach(line; outputVM)
